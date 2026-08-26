@@ -33,7 +33,8 @@ zbus.workspace = true
 # (see heaptrack probe: real Rust heap stayed at 27 MB peak / 22 MB leaked
 # while RSS grew to 3.6 GB). mimalloc bounds arenas and reuses freed blocks,
 # eliminating the retention entirely.
-mimalloc = { version = "0.1", default-features = false, features = ["extended"] }
+# Use default features to include the bundled C library (static linkage).
+mimalloc = { version = "0.1", default-features = true }
 
 # Time handling
 chrono.workspace = true
