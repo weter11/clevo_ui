@@ -121,6 +121,15 @@ Binaries are placed in `target/release/`:
 - `lapsphere` — GUI
 - `lapsphere-daemon` — system daemon
 
+### GitHub Actions artifacts
+
+The CI workflow uploads two package artifacts per successful run:
+
+- `lapsphere-ubuntu-24.04-deb` — a Debian package containing both binaries and their service, DBus, desktop, and icon files.
+- `lapsphere-arch-pkg` — an Arch package containing the same application files.
+
+The package artifacts are the supported CI outputs. A workflow run also has a source commit, so an artifact created by an older run is an older snapshot even when its package version remains `0.1.0`. The date shown in `debian/changelog` is package release metadata and does not identify when a CI artifact was built.
+
 ---
 
 ## Installation (Debian/Ubuntu)
