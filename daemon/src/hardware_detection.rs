@@ -712,8 +712,8 @@ pub fn get_tdp_profiles() -> Result<Vec<String>> {
         return Ok(vec![]);
     }
     
-    match TuxedoIo::new() {
-        Ok(io) => {
+    match TuxedoIo::shared() {
+        Some(io) => {
             match io.get_available_profiles() {
                 Ok(profiles) => {
                     static LOGGED_ONCE: Mutex<bool> = Mutex::new(false);
@@ -730,8 +730,8 @@ pub fn get_tdp_profiles() -> Result<Vec<String>> {
                 }
             }
         }
-        Err(e) => {
-            log::warn!(target: "hw.detect", "Failed to open /dev/tuxedo_io: {}", e);
+        None => {
+            log::warn!(target: "hw.detect", "Failed to open /dev/tuxedo_io");
             Ok(vec![])
         }
     }
@@ -770,7 +770,7 @@ pub fn get_current_tdp_profile() -> Result<String> {
         return Err(anyhow!("TDP profiles not available"));
     }
     
-    let io = TuxedoIo::new()?;
+    let io = TuxedoIo::shared().ok_or_else(|| anyhow!("tuxedo_io not available"))?;
     let profiles = get_tdp_profiles()?;
     if profiles.is_empty() {
         return Err(anyhow!("No TDP profiles available"));
@@ -796,7 +796,7 @@ pub fn get_all_fan_info() -> Result<Vec<FanInfo>> {
 
     // 1. Get system fans (Tuxedo/Uniwill/Clevo)
     if TuxedoIo::is_available() {
-        if let Ok(io) = TuxedoIo::new() {
+        if let Some(io) = TuxedoIo::shared() {
             let fan_settings = crate::FAN_DAEMON_STATE.lock().unwrap();
             let manual_mode = fan_settings.as_ref().map_or(false, |s| s.control_enabled);
 

@@ -186,7 +186,7 @@ pub fn apply_profile(profile: &Profile) -> Result<()> {
         set_tdp_profile(tdp_profile)?;
     }
 
-    if let Ok(io) = TuxedoIo::new() {
+    if let Some(io) = TuxedoIo::shared() {
         if io.get_interface() == HardwareInterface::Uniwill {
             if let Some(val) = profile.cpu_settings.tdp0 {
                 let _ = io.set_tdp(0, val);
@@ -387,7 +387,7 @@ pub fn set_tdp_profile(profile_name: &str) -> Result<()> {
         return Err(anyhow!("TDP profiles not available"));
     }
     
-    let io = TuxedoIo::new()?;
+    let io = TuxedoIo::shared().ok_or_else(|| anyhow!("tuxedo_io not available"))?;
     let profiles = io.get_available_profiles()?;
     
     if let Some(profile_id) = profiles.iter().position(|p| p == profile_name) {
@@ -406,7 +406,7 @@ pub fn set_fan_speed(fan_id: u32, speed_percent: u32) -> Result<()> {
     
     let speed = speed_percent.min(100);
     log::info!(target: "hw.fan", "DBus request: set fan {} to {}%", fan_id, speed);
-    let io = TuxedoIo::new()?;
+    let io = TuxedoIo::shared().ok_or_else(|| anyhow!("tuxedo_io not available"))?;
     io.set_fan_speed(fan_id, speed)?;
     
     log::info!(target: "hw.fan", "set_fan id={} speed={}%", fan_id, speed);
@@ -418,7 +418,7 @@ pub fn set_fan_auto(_fan_id: u32) -> Result<()> {
         return Err(anyhow!("Fan control not available"));
     }
     
-    let io = TuxedoIo::new()?;
+    let io = TuxedoIo::shared().ok_or_else(|| anyhow!("tuxedo_io not available"))?;
     io.set_fan_auto()?;
     
     log::info!(target: "hw.fan", "set_fans_auto");
@@ -457,7 +457,7 @@ pub fn set_webcam_state(enabled: bool) -> Result<()> {
         return Err(anyhow!("Webcam control not available"));
     }
     
-    let io = TuxedoIo::new()?;
+    let io = TuxedoIo::shared().ok_or_else(|| anyhow!("tuxedo_io not available"))?;
     io.set_webcam_state(enabled)?;
     
     log::info!(target: "hw.detect", "set_webcam enabled={}", enabled);
@@ -470,7 +470,7 @@ pub fn get_webcam_state() -> Result<bool> {
         return Ok(true);
     }
     
-    let io = TuxedoIo::new()?;
+    let io = TuxedoIo::shared().ok_or_else(|| anyhow!("tuxedo_io not available"))?;
     if io.get_interface() != HardwareInterface::Clevo {
         // Return true for non-Clevo hardware (standard state)
         return Ok(true);
@@ -643,7 +643,7 @@ pub struct RgbKeyboardControl {
 impl RgbKeyboardControl {
     pub fn new() -> Result<Self> {
         let paths = Self::find_all_keyboard_backlight_paths();
-        let tuxedo_io = TuxedoIo::new().ok().map(Arc::new);
+        let tuxedo_io = TuxedoIo::shared();
 
         if paths.is_empty() && tuxedo_io.is_none() {
             return Err(anyhow!("No keyboard backlight control available"));

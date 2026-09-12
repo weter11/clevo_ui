@@ -252,10 +252,12 @@ async fn main() -> Result<()> {
         println!("\nDaemon is running. Press Ctrl+C to exit.");
     }
 
-    // Initialize hardware interfaces
+    // Initialize hardware interfaces. `TuxedoIo::shared()` opens /dev/tuxedo_io
+    // once for the whole daemon (opening it runs interface detection), so no poll
+    // tick re-opens the device or re-probes the interface.
     let tuxedo_io = if tuxedo_io::TuxedoIo::is_available() {
-        match tuxedo_io::TuxedoIo::new() {
-            Ok(io) => {
+        match tuxedo_io::TuxedoIo::shared() {
+            Some(io) => {
                 let interface = match io.get_interface() {
                     tuxedo_io::HardwareInterface::Clevo => "Clevo",
                     tuxedo_io::HardwareInterface::Uniwill => "Uniwill",
@@ -265,8 +267,8 @@ async fn main() -> Result<()> {
                 log::debug!("Number of fans: {}", io.get_fan_count());
                 Some(io)
             }
-            Err(e) => {
-                log::warn!("Failed to initialize tuxedo_io: {}", e);
+            None => {
+                log::warn!("Failed to initialize tuxedo_io");
                 None
             }
         }
