@@ -60,29 +60,6 @@ jobs:
         retention-days: 90
         compression-level: 0
 
-    - name: Extract binaries from deb package
-      run: |
-          mkdir -p artifacts/unzipped
-          dpkg-deb -x artifacts/lapsphere_*.deb artifacts/deb-extract
-          cp artifacts/deb-extract/usr/bin/lapsphere-daemon artifacts/unzipped/
-          cp artifacts/deb-extract/usr/bin/lapsphere artifacts/unzipped/
-
-    - name: Upload unzipped binaries
-      uses: actions/upload-artifact@v7
-      with:
-        name: lapsphere-ubuntu-24.04-bin-lapsphere-daemon
-        path: artifacts/unzipped/lapsphere-daemon
-        retention-days: 90
-        compression-level: 0
-
-    - name: Upload unzipped GUI binary
-      uses: actions/upload-artifact@v7
-      with:
-        name: lapsphere-ubuntu-24.04-bin-lapsphere
-        path: artifacts/unzipped/lapsphere
-        retention-days: 90
-        compression-level: 0
-
   build-arch:
     runs-on: ubuntu-latest
     container:
@@ -119,22 +96,5 @@ jobs:
       with:
         name: lapsphere-arch-pkg
         path: "*.pkg.tar.zst"
-        retention-days: 90
-        compression-level: 0
-
-    - name: Upload unzipped binaries
-      uses: actions/upload-artifact@v7
-      with:
-        name: lapsphere-arch-bin-lapsphere-daemon
-        path: |
-          pkg/lapsphere/usr/bin/lapsphere-daemon
-        retention-days: 90
-        compression-level: 0
-
-    - name: Upload unzipped GUI binary
-      uses: actions/upload-artifact@v7
-      with:
-        name: lapsphere-arch-bin-lapsphere
-        path: pkg/lapsphere/usr/bin/lapsphere
         retention-days: 90
         compression-level: 0
