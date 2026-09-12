@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::fs::OpenOptions;
 use std::os::unix::io::AsRawFd;
+use std::sync::{Arc, OnceLock};
 use std::sync::atomic::{AtomicBool, Ordering};
 use nix::errno::Errno;
 use nix::libc;
@@ -126,6 +127,19 @@ impl TuxedoIo {
         Ok(())
     }
     
+    /// Process-wide shared instance.
+    ///
+    /// Opening `/dev/tuxedo_io` also runs interface detection (two
+    /// hardware-check ioctls plus fan-info probes). Callers used to open the
+    /// device themselves, which put that detection inside poll loops; the
+    /// daemon now opens it once and shares the handle.
+    pub fn shared() -> Option<Arc<Self>> {
+        static SHARED: OnceLock<Option<Arc<TuxedoIo>>> = OnceLock::new();
+        SHARED
+            .get_or_init(|| TuxedoIo::new().ok().map(Arc::new))
+            .clone()
+    }
+
     pub fn new() -> Result<Self> {
         let device = OpenOptions::new()
             .read(true)

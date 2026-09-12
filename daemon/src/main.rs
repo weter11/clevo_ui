@@ -5,6 +5,7 @@ mod hardware_detection;
 mod tuxedo_io;
 mod battery_control;
 mod polling_scheduler;
+mod hw_gate;
 
 use anyhow::Result;
 use tokio::signal;
@@ -252,28 +253,28 @@ async fn main() -> Result<()> {
         println!("\nDaemon is running. Press Ctrl+C to exit.");
     }
 
-    // Initialize hardware interfaces
-    let tuxedo_io = if tuxedo_io::TuxedoIo::is_available() {
-        match tuxedo_io::TuxedoIo::new() {
-            Ok(io) => {
-                let interface = match io.get_interface() {
-                    tuxedo_io::HardwareInterface::Clevo => "Clevo",
-                    tuxedo_io::HardwareInterface::Uniwill => "Uniwill",
-                    tuxedo_io::HardwareInterface::None => "None",
-                };
-                log::debug!("Detected hardware interface: {}", interface);
-                log::debug!("Number of fans: {}", io.get_fan_count());
-                Some(io)
-            }
-            Err(e) => {
-                log::warn!("Failed to initialize tuxedo_io: {}", e);
-                None
-            }
+    // Initialize hardware interfaces. `TuxedoIo::shared()` opens /dev/tuxedo_io
+    // once for the whole daemon (opening it runs interface detection), so no
+    // poll tick re-opens the device or re-probes the interface.
+    let tuxedo_io = match tuxedo_io::TuxedoIo::shared() {
+        Some(io) => {
+            let interface = match io.get_interface() {
+                tuxedo_io::HardwareInterface::Clevo => "Clevo",
+                tuxedo_io::HardwareInterface::Uniwill => "Uniwill",
+                tuxedo_io::HardwareInterface::None => "None",
+            };
+            log::debug!("Detected hardware interface: {}", interface);
+            log::debug!("Number of fans: {}", io.get_fan_count());
+            Some(io)
         }
-    } else {
-        log::debug!("/dev/tuxedo_io not available - some features will be disabled");
-        None
+        None => {
+            log::debug!("/dev/tuxedo_io not available - some features will be disabled");
+            None
+        }
     };
+
+    // A gated capability may be usable again in another power state.
+    spawn_resume_rearm_task();
 
     // Check battery charge control
     if battery_control::BatteryControl::is_available() {
@@ -494,6 +495,56 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Re-arm capabilities disabled by [`hw_gate`] after resume-from-suspend: the
+/// firmware may behave differently in the new power state, so the next access
+/// is a fresh probe. Best effort - if logind is unreachable the capability
+/// stays disabled and a daemon restart is the manual recheck.
+fn spawn_resume_rearm_task() {
+    let spawned = std::thread::Builder::new()
+        .name("resume-rearm".to_string())
+        .spawn(|| {
+            let conn = match zbus::blocking::Connection::system() {
+                Ok(conn) => conn,
+                Err(e) => {
+                    log::debug!("resume re-arm hook unavailable (system bus): {}", e);
+                    return;
+                }
+            };
+            let proxy = match zbus::blocking::Proxy::new(
+                &conn,
+                "org.freedesktop.login1",
+                "/org/freedesktop/login1",
+                "org.freedesktop.login1.Manager",
+            ) {
+                Ok(proxy) => proxy,
+                Err(e) => {
+                    log::debug!("resume re-arm hook unavailable (logind): {}", e);
+                    return;
+                }
+            };
+            let signals = match proxy.receive_signal("PrepareForSleep") {
+                Ok(signals) => signals,
+                Err(e) => {
+                    log::debug!("resume re-arm hook unavailable (signal match): {}", e);
+                    return;
+                }
+            };
+            log::debug!("resume re-arm hook active");
+            for signal in signals {
+                // Body: true = about to suspend, false = resumed.
+                match signal.body().deserialize::<bool>() {
+                    Ok(false) => hw_gate::rearm_after_resume(),
+                    Ok(true) => {}
+                    Err(e) => log::debug!("PrepareForSleep payload unreadable: {}", e),
+                }
+            }
+        });
+
+    if let Err(e) = spawned {
+        log::debug!("resume re-arm hook not spawned: {}", e);
+    }
 }
 
 pub fn refresh_hardware_cache() {

@@ -712,8 +712,8 @@ pub fn get_tdp_profiles() -> Result<Vec<String>> {
         return Ok(vec![]);
     }
     
-    match TuxedoIo::new() {
-        Ok(io) => {
+    match TuxedoIo::shared() {
+        Some(io) => {
             match io.get_available_profiles() {
                 Ok(profiles) => {
                     static LOGGED_ONCE: Mutex<bool> = Mutex::new(false);
@@ -730,8 +730,8 @@ pub fn get_tdp_profiles() -> Result<Vec<String>> {
                 }
             }
         }
-        Err(e) => {
-            log::warn!(target: "hw.detect", "Failed to open /dev/tuxedo_io: {}", e);
+        None => {
+            log::warn!(target: "hw.detect", "Failed to open /dev/tuxedo_io");
             Ok(vec![])
         }
     }
@@ -770,7 +770,7 @@ pub fn get_current_tdp_profile() -> Result<String> {
         return Err(anyhow!("TDP profiles not available"));
     }
     
-    let io = TuxedoIo::new()?;
+    let io = TuxedoIo::shared().ok_or_else(|| anyhow!("tuxedo_io not available"))?;
     let profiles = get_tdp_profiles()?;
     if profiles.is_empty() {
         return Err(anyhow!("No TDP profiles available"));
@@ -796,7 +796,7 @@ pub fn get_all_fan_info() -> Result<Vec<FanInfo>> {
 
     // 1. Get system fans (Tuxedo/Uniwill/Clevo)
     if TuxedoIo::is_available() {
-        if let Ok(io) = TuxedoIo::new() {
+        if let Some(io) = TuxedoIo::shared() {
             let fan_settings = crate::FAN_DAEMON_STATE.lock().unwrap();
             let manual_mode = fan_settings.as_ref().map_or(false, |s| s.control_enabled);
 
@@ -3704,8 +3704,8 @@ pub fn get_battery_info() -> Result<BatteryInfo> {
         battery_health,
         manufacturer: read_sysfs_string(&format!("{}/manufacturer", base))?,
         model: read_sysfs_string(&format!("{}/model_name", base))?,
-        charge_start_threshold: read_sysfs_u64(&format!("{}/charge_control_start_threshold", base)).ok().map(|v| v as u8),
-        charge_end_threshold: read_sysfs_u64(&format!("{}/charge_control_end_threshold", base)).ok().map(|v| v as u8),
+        charge_start_threshold: read_charge_control_threshold(&format!("{}/charge_control_start_threshold", base)),
+        charge_end_threshold: read_charge_control_threshold(&format!("{}/charge_control_end_threshold", base)),
     })
 }
 
@@ -3731,6 +3731,27 @@ pub fn get_mount_info() -> Result<Vec<MountInfo>> {
     }
 
     Ok(mounts_info)
+}
+
+/// Read a tuxedo flexicharger threshold, honoring the permanent-failure gate.
+///
+/// `charge_control_*_threshold` is implemented by the Clevo `_DSM` cmd 0x04
+/// path (`clevo_flexicharger_read` in tuxedo-drivers), which on some firmwares
+/// aborts with `AE_AML_BUFFER_LIMIT` before returning anything. Every failed
+/// call makes the ACPI interpreter dump ~7 lines into the kernel log, so a
+/// single failure disables the whole capability instead of re-asking at poll
+/// rate (see `hw_gate`).
+fn read_charge_control_threshold(path: &str) -> Option<u8> {
+    if !crate::hw_gate::enabled(crate::hw_gate::BATTERY_CHARGE_CONTROL) {
+        return None;
+    }
+    match read_sysfs_u64(path) {
+        Ok(value) => Some(value as u8),
+        Err(_) => {
+            crate::hw_gate::note_failure(crate::hw_gate::BATTERY_CHARGE_CONTROL);
+            None
+        }
+    }
 }
 
 fn read_sysfs_u64(path: &str) -> Result<u64> {
