@@ -1,0 +1,34 @@
+[Unit]
+Description=LapSphere hardware monitor and control daemon
+Documentation=https://github.com/weter11/LapSphere
+# Started by D-Bus activation (io.lapsphere.Control) or explicitly; either way
+# this unit is what supervises it.
+After=dbus.service dbus.socket
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=dbus
+BusName=io.lapsphere.Control
+ExecStart=/usr/bin/lapsphere-daemon
+
+# Supervision and resource caps. Without them an unsupervised poll loop can run
+# for days: 2026-09, a daemon re-reading a permanently-failing firmware call at
+# ~2 Hz wrote 4 GiB of kernel log into /var/log and filled the root filesystem.
+Restart=on-failure
+RestartSec=2
+CPUQuota=50%
+MemoryMax=768M
+TasksMax=256
+
+# Hardening that does not restrict the daemon's actual job (writing /sys and
+# talking to /dev/tuxedo_io, /dev/nvidia*): ProtectKernelTunables and
+# DevicePolicy are deliberately left at their defaults, since sysfs writes are
+# the whole point of this daemon.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+SyslogIdentifier=lapsphere-daemon
+
+[Install]
+WantedBy=multi-user.target

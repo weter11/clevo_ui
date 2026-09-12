@@ -15,7 +15,10 @@ override_dh_auto_install:
 	
 	# Install DBus policy and activation service
 	install -D -m 644 debian/io.lapsphere.Control.conf debian/lapsphere/usr/share/dbus-1/system.d/io.lapsphere.Control.conf
-	install -D -m 644 debian/io.lapsphere.Control.service debian/lapsphere/usr/share/dbus-1/system-services/io.lapsphere.Control.service
+	install -D -m 644 data/io.lapsphere.Control.service debian/lapsphere/usr/share/dbus-1/system-services/io.lapsphere.Control.service
+	
+	# Install systemd unit (supervision + resource caps for the daemon)
+	install -D -m 644 data/lapsphere-daemon.service debian/lapsphere/usr/lib/systemd/system/lapsphere-daemon.service
 	
 	# Install desktop file
 	install -D -m 644 debian/lapsphere.desktop debian/lapsphere/usr/share/applications/io.lapsphere.LapSphere.desktop

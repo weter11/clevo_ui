@@ -27,6 +27,9 @@ package() {
   install -Dm644 data/io.lapsphere.Control.conf "$pkgdir/usr/share/dbus-1/system.d/io.lapsphere.Control.conf"
   install -Dm644 data/io.lapsphere.Control.service "$pkgdir/usr/share/dbus-1/system-services/io.lapsphere.Control.service"
 
+  # systemd unit: supervision + resource caps for the daemon
+  install -Dm644 data/lapsphere-daemon.service "$pkgdir/usr/lib/systemd/system/lapsphere-daemon.service"
+
   # Desktop & Autostart
   install -Dm644 data/io.lapsphere.LapSphere.desktop "$pkgdir/usr/share/applications/io.lapsphere.LapSphere.desktop"
   install -Dm644 data/io.lapsphere.LapSphere.desktop "$pkgdir/etc/xdg/autostart/io.lapsphere.LapSphere.desktop"
