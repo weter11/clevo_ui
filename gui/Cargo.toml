@@ -34,7 +34,7 @@ zbus.workspace = true
 # while RSS grew to 3.6 GB). mimalloc bounds arenas and reuses freed blocks,
 # eliminating the retention entirely.
 # Use default features to include the bundled C library (static linkage).
-mimalloc = { version = "0.1", default-features = true }
+mimalloc = { version = "0.1", default-features = true, features = ["v2"] }
 
 # Time handling
 chrono.workspace = true
