@@ -543,39 +543,15 @@ impl LapSphereApp {
                 HardwareUpdate::GamepadInfo(connected_gamepads) => {
                     self.state.gamepad_info = connected_gamepads.clone();
 
-                    let mut changed = false;
-
-                    // Update existing ones and mark as connected/disconnected
-                    for remembered in &mut self.state.config.remembered_gamepads {
-                        if let Some(connected) = connected_gamepads.iter().find(|c| c.uid == remembered.uid) {
-                            if remembered.status != GamepadStatus::Connected ||
-                               remembered.battery_level != connected.battery_level ||
-                               remembered.power_status != connected.power_status ||
-                               remembered.connection_type != connected.connection_type ||
-                               remembered.name != connected.name
-                            {
-                                remembered.status = GamepadStatus::Connected;
-                                remembered.name = connected.name.clone();
-                                remembered.battery_level = connected.battery_level;
-                                remembered.power_status = connected.power_status.clone();
-                                remembered.connection_type = connected.connection_type.clone();
-                                changed = true;
-                            }
-                        } else if remembered.status != GamepadStatus::Disconnected {
-                            remembered.status = GamepadStatus::Disconnected;
-                            changed = true;
-                        }
-                    }
-
-                    // Add new ones
-                    for connected in connected_gamepads {
-                        if !self.state.config.remembered_gamepads.iter().any(|r| r.uid == connected.uid) {
-                            self.state.config.remembered_gamepads.push(connected);
-                            changed = true;
-                        }
-                    }
-
-                    if changed {
+                    // Single reconciliation point (see gamepad_registry): stable
+                    // uids persist as before, volatile sysfs-path uids are
+                    // session-scoped so reconnects cannot grow the database,
+                    // and newly resolved stable identities adopt same-device
+                    // rows instead of duplicating them.
+                    if crate::gamepad_registry::reconcile(
+                        &mut self.state.config.remembered_gamepads,
+                        &connected_gamepads,
+                    ) {
                         let _ = self.state.save_settings();
                     }
                 }

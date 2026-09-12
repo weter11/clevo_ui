@@ -1,5 +1,6 @@
 mod app;
 mod dbus_client;
+mod gamepad_registry;
 mod theme;
 mod pages;
 mod keyboard_shortcuts;
@@ -114,6 +115,16 @@ fn check_single_instance_windows() -> Option<isize> {
         Some(handle)
     }
 }
+
+// Replace glibc malloc with mimalloc: glibc's per-thread arena pool retains
+// freed-but-unused memory (up to 64 MB per arena, one per malloc-thread) and
+// never returns it to the OS. Under the GUI's ~8k alloc/s D-Bus polling load
+// that arena ratchet accumulated ~8 GB of resident-but-free heap over hours
+// (see heaptrack probe: real Rust heap stayed at 27 MB peak / 22 MB leaked
+// while RSS grew to 3.6 GB). mimalloc bounds arenas and reuses freed blocks,
+// eliminating the retention entirely.
+#[global_allocator]
+static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() -> Result<(), eframe::Error> {
     env_logger::init();

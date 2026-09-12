@@ -3564,16 +3564,30 @@ pub fn get_gamepad_info() -> Result<Vec<GamepadInfo>> {
                 if is_gamepad {
                     if let Ok(device_name) = fs::read_to_string(path.join("name")) {
                         let device_name = device_name.trim().to_string();
-                        // Use sysfs path as absolute fallback for UID if udev failed
-                        let mut uid = udev_uid.unwrap_or_else(|| path.to_string_lossy().to_string());
+                        // Identity chain for the remembered-gamepad database:
+                        // udev serials/ID_PATH when published, then the HID
+                        // MAC (`device/uniq`), and ONLY as a last resort the
+                        // sysfs input path -- which the kernel renumbers on
+                        // every reconnect (BT pads), so it is volatile.
+                        let (uid, uid_source) = match &udev_uid {
+                            Some(u) => (u.clone(), "udev"),
+                            None => (
+                                path.to_string_lossy().to_string(),
+                                "sysfs-path-volatile",
+                            ),
+                        };
 
-                        // Try to get uniq (MAC address) which is very stable across connection types
+                        // Prefer the uniq (MAC address): stable across
+                        // connection types; overrides the chain above.
+                        let mut uid = uid;
                         if let Ok(uniq) = fs::read_to_string(path.join("device/uniq")) {
                             let uniq = uniq.trim();
                             if !uniq.is_empty() && uniq != "00:00:00:00:00:00" {
                                 uid = normalize_uid(uniq.to_string());
                             }
                         }
+
+                        log::debug!(target: "hw.detect", "Gamepad '{}': uid={} (source={})", device_name, uid, uid_source);
 
                         if !seen_uids.contains(&uid) {
                             let bustype = fs::read_to_string(path.join("id/bustype"))
