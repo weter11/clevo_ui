@@ -14,6 +14,9 @@ sha256sums=('SKIP')
 
 build() {
   cd "$pkgname-$pkgver"
+  # Arch's rustup toolchain defaults to rust-lld, which fails to resolve
+  # the bundled mimalloc archive during the release link.
+  export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-fuse-ld=bfd"
   cargo build --release --all
 }
 
